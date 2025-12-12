@@ -1450,9 +1450,8 @@ Thanks to the following projects for their support:
 
 ## 📧 Contact
 
-- Project Homepage: https://github.com/yourusername/pycontroldae
-- Issues: https://github.com/yourusername/pycontroldae/issues
-- Email: your.email@example.com
+- Project Homepage: https://github.com/pronoobe/pycontroldae
+- Issues: https://github.com/pronoobe/pycontroldae/issues
 
 ---
 
