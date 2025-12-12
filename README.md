@@ -1,4 +1,4 @@
-# pycontroldae - Python Control System Modeling and Simulation Library
+# pycontroldae - Python Control System Modeling and Simulation Library (Claude code version)
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
 [![Julia](https://img.shields.io/badge/Julia-1.9+-purple.svg)](https://julialang.org/)
