@@ -1450,9 +1450,8 @@ u0 = {"state_name": value}  # 缺少模块名
 
 ## 📧 联系方式
 
-- 项目主页：https://github.com/yourusername/pycontroldae
-- Issues：https://github.com/yourusername/pycontroldae/issues
-- Email: your.email@example.com
+- 项目主页：https://github.com/pronoobe/pycontroldae
+- Issues：https://github.com/pronoobe/pycontroldae/issues
 
 ---
 
