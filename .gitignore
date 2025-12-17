@@ -159,5 +159,15 @@ pycontroldae.egg-info/
 dist/
 build/
 
-# Sensitive files
+# Sensitive files - containing tokens/credentials
 upload_to_pypi.py
+upload_to_github.bat
+*token*.py
+*token*.txt
+*secret*.py
+*credential*.py
+.pypirc
+.env.local
+*.key
+*.pem
+
