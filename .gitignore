@@ -158,3 +158,6 @@ __pycache__/
 pycontroldae.egg-info/
 dist/
 build/
+
+# Sensitive files
+upload_to_pypi.py

@@ -111,7 +111,8 @@ input_signal.set_output("signal")
 system = System("rc_system")
 system.add_module(rc_circuit)
 system.add_module(input_signal)
-system.connect("input.signal ~ rc.u1")
+# Use Port API for connections (recommended)
+system.connect(input_signal.signal >> rc_circuit.u1)
 
 # Compile and simulate
 system.compile()
@@ -153,11 +154,11 @@ system = System("temp_control")
 for mod in [setpoint, error_calc, pid, plant]:
     system.add_module(mod)
 
-# Define connections
-system.connect("sp.signal ~ error.input1")
-system.connect("plant.y1 ~ error.input2")
-system.connect("error.output ~ pid.error")
-system.connect("pid.output ~ plant.u1")
+# Define connections using Port API (recommended)
+system.connect(setpoint.signal >> error_calc.input1)
+system.connect(plant.y1 >> error_calc.input2)
+system.connect(error_calc.output >> pid.error)
+system.connect(pid.output >> plant.u1)
 
 # Configure data probe
 probe = DataProbe(

@@ -111,7 +111,8 @@ input_signal.set_output("signal")
 system = System("rc_system")
 system.add_module(rc_circuit)
 system.add_module(input_signal)
-system.connect("input.signal ~ rc.u1")
+# 使用Port API进行连接（推荐）
+system.connect(input_signal.signal >> rc_circuit.u1)
 
 # 编译和仿真
 system.compile()
@@ -153,11 +154,11 @@ system = System("temp_control")
 for mod in [setpoint, error_calc, pid, plant]:
     system.add_module(mod)
 
-# 定义连接
-system.connect("sp.signal ~ error.input1")
-system.connect("plant.y1 ~ error.input2")
-system.connect("error.output ~ pid.error")
-system.connect("pid.output ~ plant.u1")
+# 使用Port API定义连接（推荐）
+system.connect(setpoint.signal >> error_calc.input1)
+system.connect(plant.y1 >> error_calc.input2)
+system.connect(error_calc.output >> pid.error)
+system.connect(pid.output >> plant.u1)
 
 # 配置数据探测器
 probe = DataProbe(
