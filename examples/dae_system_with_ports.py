@@ -15,7 +15,14 @@ import sys
 import io
 from pycontroldae.core import Module, CompositeModule, System, Simulator, DataProbe
 from pycontroldae.blocks import Step
-
+import matplotlib
+try:
+    matplotlib.use('TKAgg')
+except:
+    pass
+plt.rcParams['font.sans-serif'] = ['SimHei', 'SimSun', 'Times New Roman']
+plt.rcParams['axes.unicode_minus'] = True
+plt.rcParams['font.size'] = 9.0
 # Set UTF-8 encoding for output
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')

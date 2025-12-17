@@ -1575,7 +1575,6 @@ Thanks to the following projects for their support:
 
 - Project Homepage: https://github.com/pronoobe/pycontroldae
 - Issues: https://github.com/pronoobe/pycontroldae/issues
-- Email: your.email@example.com
 
 ---
 

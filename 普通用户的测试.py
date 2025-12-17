@@ -12,7 +12,7 @@ plt.rcParams['font.sans-serif'] = ['SimHei', 'SimSun', 'Times New Roman']
 plt.rcParams['axes.unicode_minus'] = True
 plt.rcParams['font.size'] = 9.0
 
-def SecondOrderDAE(name, zeta=0.2, wn=10.0, k=2.0):
+def SecondOrderDAE(name, zeta=0.2, wn=10.0, k=200.0):
     """
     二阶系统（DAE 形式）：
         x' = v
@@ -23,7 +23,7 @@ def SecondOrderDAE(name, zeta=0.2, wn=10.0, k=2.0):
     m = Module(name)
 
     # ===== 状态 =====
-    m.add_state("x", 0)  # 位移
+    m.add_state("x", 0.0)  # 位移
     m.add_state("v", 0.0)  # 速度
 
     # ===== 代数变量（无导数）=====
@@ -61,7 +61,7 @@ plant = SecondOrderDAE(
     name="plant",
     zeta=0.2,  # 初始阻尼
     wn=10.0,
-    k=2.0
+    k=200.0
 )
 
 # 添加模块
@@ -88,13 +88,13 @@ probe = DataProbe(
     description="Second order DAE states"
 )
 sim = Simulator(system)
-zetas = [0.01, 0.1, 0.3, 0.7, 1.0]
+zetas = [0.1, 0.3, 0.7, 1.0]
 
 plt.figure(figsize=(8, 5))
 
 for z in zetas:
     result = sim.run(
-        t_span=(0.0, 15.0),
+        t_span=(0.0, 5.0),
         dt=0.001,
         params={
             "plant.zeta": z
@@ -104,6 +104,7 @@ for z in zetas:
 
     df = result.get_probe_dataframe()
     plt.plot(df["time"], df["x"], label=f"zeta = {z}")
+    plt.plot(df["time"], df["y"], label=f"zeta = {z}")
 
 plt.xlabel("Time (s)")
 plt.ylabel("Displacement x")

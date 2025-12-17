@@ -422,12 +422,15 @@ class Simulator:
 
                         # Find matching variable (try multiple matching strategies)
                         target_var = nothing
+                        is_observable = false
 
                         # Strategy 1: Exact match after removing (t) suffix
                         for v in all_vars
                             v_str = replace(string(v), "(t)" => "")
                             if Symbol(v_str) == var_sym
                                 target_var = v
+                                # Check if this is an observable
+                                is_observable = v in sys_observables
                                 break
                             end
                         end
@@ -439,6 +442,7 @@ class Simulator:
                                 v_converted = replace(v_str, "₊" => ".")
                                 if v_converted == "{var_name}"
                                     target_var = v
+                                    is_observable = v in sys_observables
                                     break
                                 end
                             end
@@ -451,6 +455,7 @@ class Simulator:
                                 if contains(v_str, "{julia_var_name}") ||
                                    contains("{julia_var_name}", v_str)
                                     target_var = v
+                                    is_observable = v in sys_observables
                                     break
                                 end
                             end
@@ -459,15 +464,31 @@ class Simulator:
                         # Extract values from solution
                         if target_var !== nothing
                             try
-                                # Try to get values from solution using symbolic indexing
-                                global _probe_values_{system_name} = [_sol_{system_name}[target_var, i] for i in 1:length(_sol_{system_name}.t)]
-                            catch e
-                                # If symbolic indexing fails, try to find in unknowns by index
-                                var_idx = findfirst(x -> x == target_var, sys_unknowns)
-                                if var_idx !== nothing
-                                    global _probe_values_{system_name} = [_sol_{system_name}.u[i][var_idx] for i in 1:length(_sol_{system_name}.t)]
+                                if is_observable
+                                    # For observables, we need to compute them from the solution
+                                    # Observables in ModelingToolkit are stored as Equation objects (lhs ~ rhs)
+                                    # Extract lhs (the variable symbol) from the equation
+                                    obs_var = target_var.lhs
+
+                                    # Extract using the lhs symbol with sol(t, idxs=var)
+                                    global _probe_values_{system_name} = [_sol_{system_name}(t, idxs=obs_var) for t in _sol_{system_name}.t]
                                 else
-                                    global _probe_values_{system_name} = zeros(length(_sol_{system_name}.t))
+                                    # For unknowns (differential states), use direct indexing
+                                    global _probe_values_{system_name} = [_sol_{system_name}[target_var, i] for i in 1:length(_sol_{system_name}.t)]
+                                end
+                            catch e
+                                # Fallback: try alternative methods
+                                try
+                                    # Try using sol(t, idxs=var) for all variables
+                                    global _probe_values_{system_name} = [_sol_{system_name}(t, idxs=target_var) for t in _sol_{system_name}.t]
+                                catch e2
+                                    # If that fails too, try to find in unknowns by index
+                                    var_idx = findfirst(x -> x == target_var, sys_unknowns)
+                                    if var_idx !== nothing
+                                        global _probe_values_{system_name} = [_sol_{system_name}.u[i][var_idx] for i in 1:length(_sol_{system_name}.t)]
+                                    else
+                                        global _probe_values_{system_name} = zeros(length(_sol_{system_name}.t))
+                                    end
                                 end
                             end
                         else
