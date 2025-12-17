@@ -152,3 +152,9 @@ temp/
 
 # Claude Code
 .claude/
+nul
+*.pyc
+__pycache__/
+pycontroldae.egg-info/
+dist/
+build/
