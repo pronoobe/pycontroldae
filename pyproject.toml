@@ -4,16 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pycontroldae"
-version = "0.2.0"
+version = "0.2.1"
 description = "A powerful Python library for building, simulating, and analyzing control systems with Julia backend"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "PyControlDAE Contributors", email = "your.email@example.com"}
+    {name = "PyControlDAE Contributors"}
 ]
 maintainers = [
-    {name = "PyControlDAE Contributors", email = "your.email@example.com"}
+    {name = "PyControlDAE Contributors"}
 ]
 keywords = [
     "control-systems",
