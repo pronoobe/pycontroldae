@@ -62,7 +62,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/pycontroldae.git
+git clone https://github.com/pronoobe/pycontroldae.git
 cd pycontroldae
 
 # 安装依赖
