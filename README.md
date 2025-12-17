@@ -62,7 +62,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/pycontroldae.git
+git clone https://github.com/pronoobe/pycontroldae.git
 cd pycontroldae
 
 # Install dependencies
