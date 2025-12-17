@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycontroldae"
+version = "0.2.0"
+description = "A powerful Python library for building, simulating, and analyzing control systems with Julia backend"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "PyControlDAE Contributors", email = "your.email@example.com"}
+]
+maintainers = [
+    {name = "PyControlDAE Contributors", email = "your.email@example.com"}
+]
+keywords = [
+    "control-systems",
+    "simulation",
+    "modeling",
+    "differential-equations",
+    "julia",
+    "pid-controller",
+    "state-space",
+    "dae",
+    "ode",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "juliacall>=0.9.0",
+    "numpy>=1.20.0",
+    "pandas>=1.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+]
+docs = [
+    "sphinx>=5.0",
+    "sphinx-rtd-theme>=1.0",
+]
+visualization = [
+    "matplotlib>=3.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/pronoobe/pycontroldae"
+Documentation = "https://github.com/pronoobe/pycontroldae#readme"
+Repository = "https://github.com/pronoobe/pycontroldae"
+"Bug Tracker" = "https://github.com/pronoobe/pycontroldae/issues"
+
+[tool.setuptools]
+packages = ["pycontroldae", "pycontroldae.core", "pycontroldae.blocks", "pycontroldae.examples"]
+
+[tool.setuptools.package-data]
+pycontroldae = ["*.md", "*.txt"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

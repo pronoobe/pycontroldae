@@ -62,7 +62,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/pycontroldae.git
+git clone https://github.com/pronoobe/pycontroldae.git
 cd pycontroldae
 
 # Install dependencies
@@ -318,6 +318,128 @@ def limit_output(integrator):
 
 system.add_event(when_condition(check_high_temp, limit_output, direction=1))
 ```
+
+### Example 6: DAE Systems with Algebraic Constraints
+
+```python
+from pycontroldae.core import Module, System, Simulator
+from pycontroldae.blocks import Step
+import matplotlib.pyplot as plt
+
+# Define Mass module
+class Mass(Module):
+    """Mass block with position, velocity, and force inputs"""
+    def __init__(self, name, mass=1.0, damping=0.1):
+        super().__init__(name)
+
+        # States
+        self.add_state("x", 0.0)     # Position
+        self.add_state("v", 0.0)     # Velocity
+
+        # Parameters
+        self.add_param("m", mass)
+        self.add_param("b", damping)
+
+        # Inputs (algebraic)
+        self.add_state("F_ext", 0.0)
+        self.add_state("F_spring", 0.0)
+
+        # Outputs (algebraic constraints)
+        self.add_state("x_out", 0.0)
+        self.add_state("v_out", 0.0)
+
+        # Differential equations
+        self.add_equation("D(v) ~ (F_ext + F_spring - b*v) / m")
+        self.add_equation("D(x) ~ v")
+
+        # Algebraic constraints
+        self.add_equation("0 ~ x_out - x")
+        self.add_equation("0 ~ v_out - v")
+
+# Define Spring module (pure algebraic)
+class Spring(Module):
+    """Spring with algebraic force constraint"""
+    def __init__(self, name, stiffness=10.0):
+        super().__init__(name)
+
+        self.add_param("k", stiffness)
+
+        # Inputs
+        self.add_state("x1", 0.0)
+        self.add_state("x2", 0.0)
+
+        # Outputs
+        self.add_state("F1", 0.0)
+        self.add_state("F2", 0.0)
+        self.add_state("F", 0.0)
+
+        # Algebraic constraints (Hooke's law)
+        self.add_equation("0 ~ F + k * (x2 - x1)")
+        self.add_equation("0 ~ F1 + F")
+        self.add_equation("0 ~ F2 - F")
+
+# Build double-mass spring system
+system = System("double_mass_spring")
+
+force_input = Step(name="force", amplitude=10.0, step_time=0.0)
+force_input.set_output("signal")
+
+mass1 = Mass(name="m1", mass=1.0, damping=0.2)
+mass2 = Mass(name="m2", mass=2.0, damping=0.3)
+spring = Spring(name="spring", stiffness=20.0)
+
+system.add_module(force_input)
+system.add_module(mass1)
+system.add_module(mass2)
+system.add_module(spring)
+
+# Use Port API for connections
+system.connect(force_input.signal >> mass1.F_ext)
+system.connect(mass1.x_out >> spring.x1)
+system.connect(mass2.x_out >> spring.x2)
+system.connect(spring.F1 >> mass1.F_spring)
+system.connect(spring.F2 >> mass2.F_spring)
+system.connect("0.0 ~ m2.F_ext")  # No external force on mass2
+
+# Compile with automatic DAE simplification
+system.compile()  # structural_simplify handles algebraic constraints
+
+# Simulate
+simulator = Simulator(system)
+result = simulator.run(t_span=(0.0, 10.0), dt=0.01, solver="Rodas5")
+
+# Plot results
+times = result.times
+m1_x = result.get_state("m1.x")
+m2_x = result.get_state("m2.x")
+
+plt.plot(times, m1_x, label='Mass 1')
+plt.plot(times, m2_x, label='Mass 2')
+plt.plot(times, m2_x - m1_x, label='Spring displacement')
+plt.xlabel('Time (s)')
+plt.ylabel('Position (m)')
+plt.legend()
+plt.show()
+```
+
+**Key Points about DAE Systems:**
+
+1. **Differential States**: Variables with time derivatives (`D(x)`, `D(v)`)
+2. **Algebraic Variables**: Variables defined by algebraic constraints (`0 ~ F + k*(x2-x1)`)
+3. **Automatic Simplification**: `structural_simplify` automatically:
+   - Eliminates algebraic variables
+   - Reduces DAE index
+   - Generates minimal ODE system
+4. **Port-Based Connections**: Use `>>` operator for clean, type-safe module connections
+5. **Recommended Solver**: Use `Rodas5` for DAE/stiff systems
+
+**System Structure:**
+```
+Original: 4 differential equations + multiple algebraic constraints (DAE)
+After structural_simplify: 4 differential equations (ODE)
+```
+
+The library automatically handles the complex mathematics of DAE-to-ODE conversion, allowing you to focus on system modeling.
 
 ---
 
@@ -1450,8 +1572,8 @@ Thanks to the following projects for their support:
 
 ## 📧 Contact
 
-- Project Homepage: https://github.com/yourusername/pycontroldae
-- Issues: https://github.com/yourusername/pycontroldae/issues
+- Project Homepage: https://github.com/pronoobe/pycontroldae
+- Issues: https://github.com/pronoobe/pycontroldae/issues
 - Email: your.email@example.com
 
 ---

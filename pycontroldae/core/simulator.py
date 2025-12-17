@@ -325,7 +325,7 @@ class Simulator:
             probe_data = {}
             if probes is not None:
                 probe_data = self._extract_probe_data(
-                    probes, times, sys_name, self.system.name
+                    probes, times, values, state_names, sys_name, self.system.name
                 )
 
             # Return result based on return_result flag
@@ -358,6 +358,8 @@ class Simulator:
         self,
         probes: Union[DataProbe, List[DataProbe], Dict[str, DataProbe]],
         times: np.ndarray,
+        values: np.ndarray,
+        state_names: List[str],
         sys_name: str,
         system_name: str
     ) -> Dict[str, Dict[str, np.ndarray]]:
@@ -367,6 +369,8 @@ class Simulator:
         Args:
             probes: DataProbe(s) specifying variables to extract
             times: Time vector
+            values: State values array
+            state_names: List of state names
             sys_name: Julia variable name for the system
             system_name: Python system name
 
@@ -393,32 +397,82 @@ class Simulator:
                     # Convert Python variable name to Julia format (replace . with ₊)
                     julia_var_name = var_name.replace(".", "₊")
 
-                    # Create Julia code to extract this variable from solution
-                    # Use the observables function to get the variable value at all time points
+                    # Enhanced extraction code that searches in multiple locations
+                    # Initialize the output variable globally first
+                    self._jl.seval(f"_probe_values_{system_name} = Float64[]")
+
                     extract_code = f"""
-                    begin
+                    let
                         # Get the symbolic variable
                         var_sym = Symbol("{julia_var_name}")
 
-                        # Try to find the variable in unknowns or observables
-                        all_vars = vcat(unknowns({sys_name}), [])
+                        # Collect all possible variables from the system
+                        # 1. Get unknowns (differential states after simplification)
+                        sys_unknowns = unknowns({sys_name})
 
-                        # Find matching variable
+                        # 2. Get observables (algebraic variables and outputs)
+                        sys_observables = try
+                            observed({sys_name})
+                        catch
+                            []
+                        end
+
+                        # 3. Combine all variables
+                        all_vars = vcat(sys_unknowns, sys_observables)
+
+                        # Find matching variable (try multiple matching strategies)
                         target_var = nothing
+
+                        # Strategy 1: Exact match after removing (t) suffix
                         for v in all_vars
-                            if Symbol(replace(string(v), "(t)" => "", "₊" => "₊")) == var_sym ||
-                               Symbol(replace(string(v), "(t)" => "")) == Symbol("{julia_var_name}")
+                            v_str = replace(string(v), "(t)" => "")
+                            if Symbol(v_str) == var_sym
                                 target_var = v
                                 break
                             end
                         end
 
+                        # Strategy 2: Match with converted name (. to ₊)
+                        if target_var === nothing
+                            for v in all_vars
+                                v_str = replace(string(v), "(t)" => "")
+                                v_converted = replace(v_str, "₊" => ".")
+                                if v_converted == "{var_name}"
+                                    target_var = v
+                                    break
+                                end
+                            end
+                        end
+
+                        # Strategy 3: Partial match (for simplified variable names)
+                        if target_var === nothing
+                            for v in all_vars
+                                v_str = replace(string(v), "(t)" => "")
+                                if contains(v_str, "{julia_var_name}") ||
+                                   contains("{julia_var_name}", v_str)
+                                    target_var = v
+                                    break
+                                end
+                            end
+                        end
+
+                        # Extract values from solution
                         if target_var !== nothing
-                            # Extract values for this variable from solution
-                            _probe_values_{system_name} = [_sol_{system_name}[target_var, i] for i in 1:length(_sol_{system_name}.t)]
+                            try
+                                # Try to get values from solution using symbolic indexing
+                                global _probe_values_{system_name} = [_sol_{system_name}[target_var, i] for i in 1:length(_sol_{system_name}.t)]
+                            catch e
+                                # If symbolic indexing fails, try to find in unknowns by index
+                                var_idx = findfirst(x -> x == target_var, sys_unknowns)
+                                if var_idx !== nothing
+                                    global _probe_values_{system_name} = [_sol_{system_name}.u[i][var_idx] for i in 1:length(_sol_{system_name}.t)]
+                                else
+                                    global _probe_values_{system_name} = zeros(length(_sol_{system_name}.t))
+                                end
+                            end
                         else
-                            # Variable not found, return zeros
-                            _probe_values_{system_name} = zeros(length(_sol_{system_name}.t))
+                            # Variable not found after all strategies
+                            global _probe_values_{system_name} = zeros(length(_sol_{system_name}.t))
                         end
                     end
                     """
@@ -427,15 +481,26 @@ class Simulator:
 
                     # Get the extracted values
                     values_jl = self._jl.seval(f"_probe_values_{system_name}")
-                    values = np.array(values_jl)
+                    extracted_values = np.array(values_jl)
 
-                    probe_vars[custom_name] = values
+                    # Check if values are valid (not all zeros when they shouldn't be)
+                    if np.allclose(extracted_values, 0.0) and var_name in state_names:
+                        # Try direct extraction from values array if variable is in state_names
+                        try:
+                            idx = state_names.index(var_name)
+                            extracted_values = values[:, idx].copy()
+                            print(f"Info: Using direct state extraction for '{var_name}'")
+                        except (ValueError, IndexError):
+                            pass  # Keep zeros if direct extraction fails
+
+                    probe_vars[custom_name] = extracted_values
 
                 except Exception as e:
                     # If extraction fails, warn but continue
                     print(f"Warning: Failed to extract probe variable '{var_name}': {e}")
-                    # Fill with NaN
-                    probe_vars[custom_name] = np.full(len(times), np.nan)
+                    print(f"  Suggestion: Use result.state_names to see available variables")
+                    # Fill with zeros
+                    probe_vars[custom_name] = np.zeros(len(times))
 
             probe_data[probe_name] = probe_vars
 

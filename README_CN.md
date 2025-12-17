@@ -62,7 +62,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/pycontroldae.git
+git clone https://github.com/pronoobe/pycontroldae.git
 cd pycontroldae
 
 # 安装依赖
@@ -318,6 +318,128 @@ def limit_output(integrator):
 
 system.add_event(when_condition(check_high_temp, limit_output, direction=1))
 ```
+
+### 示例6：含代数约束的DAE系统
+
+```python
+from pycontroldae.core import Module, System, Simulator
+from pycontroldae.blocks import Step
+import matplotlib.pyplot as plt
+
+# 定义质量块模块
+class Mass(Module):
+    """含位置、速度和力输入的质量块"""
+    def __init__(self, name, mass=1.0, damping=0.1):
+        super().__init__(name)
+
+        # 状态变量
+        self.add_state("x", 0.0)     # 位置
+        self.add_state("v", 0.0)     # 速度
+
+        # 参数
+        self.add_param("m", mass)
+        self.add_param("b", damping)
+
+        # 输入（代数变量）
+        self.add_state("F_ext", 0.0)
+        self.add_state("F_spring", 0.0)
+
+        # 输出（代数约束）
+        self.add_state("x_out", 0.0)
+        self.add_state("v_out", 0.0)
+
+        # 微分方程
+        self.add_equation("D(v) ~ (F_ext + F_spring - b*v) / m")
+        self.add_equation("D(x) ~ v")
+
+        # 代数约束
+        self.add_equation("0 ~ x_out - x")
+        self.add_equation("0 ~ v_out - v")
+
+# 定义弹簧模块（纯代数）
+class Spring(Module):
+    """具有代数力约束的弹簧"""
+    def __init__(self, name, stiffness=10.0):
+        super().__init__(name)
+
+        self.add_param("k", stiffness)
+
+        # 输入
+        self.add_state("x1", 0.0)
+        self.add_state("x2", 0.0)
+
+        # 输出
+        self.add_state("F1", 0.0)
+        self.add_state("F2", 0.0)
+        self.add_state("F", 0.0)
+
+        # 代数约束（胡克定律）
+        self.add_equation("0 ~ F + k * (x2 - x1)")
+        self.add_equation("0 ~ F1 + F")
+        self.add_equation("0 ~ F2 - F")
+
+# 构建双质量弹簧系统
+system = System("double_mass_spring")
+
+force_input = Step(name="force", amplitude=10.0, step_time=0.0)
+force_input.set_output("signal")
+
+mass1 = Mass(name="m1", mass=1.0, damping=0.2)
+mass2 = Mass(name="m2", mass=2.0, damping=0.3)
+spring = Spring(name="spring", stiffness=20.0)
+
+system.add_module(force_input)
+system.add_module(mass1)
+system.add_module(mass2)
+system.add_module(spring)
+
+# 使用Port API连接
+system.connect(force_input.signal >> mass1.F_ext)
+system.connect(mass1.x_out >> spring.x1)
+system.connect(mass2.x_out >> spring.x2)
+system.connect(spring.F1 >> mass1.F_spring)
+system.connect(spring.F2 >> mass2.F_spring)
+system.connect("0.0 ~ m2.F_ext")  # 质量2无外力
+
+# 编译（自动DAE简化）
+system.compile()  # structural_simplify 自动处理代数约束
+
+# 仿真
+simulator = Simulator(system)
+result = simulator.run(t_span=(0.0, 10.0), dt=0.01, solver="Rodas5")
+
+# 绘制结果
+times = result.times
+m1_x = result.get_state("m1.x")
+m2_x = result.get_state("m2.x")
+
+plt.plot(times, m1_x, label='质量1')
+plt.plot(times, m2_x, label='质量2')
+plt.plot(times, m2_x - m1_x, label='弹簧位移')
+plt.xlabel('时间 (s)')
+plt.ylabel('位置 (m)')
+plt.legend()
+plt.show()
+```
+
+**DAE系统要点：**
+
+1. **微分状态**：具有时间导数的变量（`D(x)`, `D(v)`）
+2. **代数变量**：由代数约束定义的变量（`0 ~ F + k*(x2-x1)`）
+3. **自动简化**：`structural_simplify` 自动完成：
+   - 消除代数变量
+   - 降低DAE指数
+   - 生成最小ODE系统
+4. **基于Port的连接**：使用 `>>` 操作符实现清晰、类型安全的模块连接
+5. **推荐求解器**：对于DAE/刚性系统使用 `Rodas5`
+
+**系统结构：**
+```
+原始系统：4个微分方程 + 多个代数约束 (DAE)
+简化后：4个微分方程 (ODE)
+```
+
+本库自动处理DAE到ODE转换的复杂数学过程，让您专注于系统建模。
 
 ---
 
@@ -1450,8 +1572,8 @@ u0 = {"state_name": value}  # 缺少模块名
 
 ## 📧 联系方式
 
-- 项目主页：https://github.com/yourusername/pycontroldae
-- Issues：https://github.com/yourusername/pycontroldae/issues
+- 项目主页：https://github.com/pronoobe/pycontroldae
+- Issues：https://github.com/pronoobe/pycontroldae/issues
 - Email: your.email@example.com
 
 ---
