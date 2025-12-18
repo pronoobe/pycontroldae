@@ -18,6 +18,7 @@ from .backend import get_jl
 from .system import System
 from .events import TimeEvent, ContinuousEvent
 from .result import SimulationResult, DataProbe
+from .expression_parser import ObservedExpressionEvaluator
 
 
 class Simulator:
@@ -162,15 +163,17 @@ class Simulator:
             else:
                 u0_dict = u0
 
-            # Build parameters
-            if params is None:
-                params_dict = {}
-                for module in self.system._modules:
-                    for param_name, default_val in module._params.items():
-                        full_name = f"{module.name}.{param_name}"
-                        params_dict[full_name] = default_val
-            else:
-                params_dict = params
+            # Build parameters - merge defaults with user-provided
+            params_dict = {}
+            # First, add all defaults
+            for module in self.system._modules:
+                for param_name, default_val in module._params.items():
+                    full_name = f"{module.name}.{param_name}"
+                    params_dict[full_name] = default_val
+
+            # Then override with user-provided params
+            if params is not None:
+                params_dict.update(params)
 
             # Build u0 and params maps using Julia code that iterates through system variables
             # This is more robust than trying to construct variable names
@@ -325,7 +328,7 @@ class Simulator:
             probe_data = {}
             if probes is not None:
                 probe_data = self._extract_probe_data(
-                    probes, times, values, state_names, sys_name, self.system.name
+                    probes, times, values, state_names, sys_name, self.system.name, params_dict
                 )
 
             # Return result based on return_result flag
@@ -361,7 +364,8 @@ class Simulator:
         values: np.ndarray,
         state_names: List[str],
         sys_name: str,
-        system_name: str
+        system_name: str,
+        params_dict: Dict[str, float]
     ) -> Dict[str, Dict[str, np.ndarray]]:
         """
         Extract data for specified probes from the Julia solution.
@@ -394,6 +398,27 @@ class Simulator:
 
             for var_name, custom_name in zip(probe.variables, probe.names):
                 try:
+                    # First, try to get the observed equation RHS for this variable
+                    # This will help us compute parametric expressions correctly
+                    observed_rhs = self._get_observed_rhs(var_name, sys_name, system_name)
+
+                    if observed_rhs is not None:
+                        # Variable is an observed variable with an expression
+                        # Try to evaluate it in Python to handle parameters correctly
+                        print(f"Info: '{var_name}' is observed variable with RHS: {observed_rhs}")
+
+                        try:
+                            # Evaluate using Python expression parser
+                            extracted_values = self._evaluate_observed_expression(
+                                observed_rhs, times, values, state_names, params_dict
+                            )
+                            probe_vars[custom_name] = extracted_values
+                            print(f"Info: Successfully evaluated '{var_name}' using Python expression parser")
+                            continue  # Skip Julia extraction
+                        except Exception as e:
+                            print(f"Warning: Failed to evaluate observed expression in Python: {e}")
+                            print(f"  Falling back to Julia extraction...")
+
                     # Convert Python variable name to Julia format (replace . with ₊)
                     julia_var_name = var_name.replace(".", "₊")
 
@@ -467,11 +492,39 @@ class Simulator:
                                 if is_observable
                                     # For observables, we need to compute them from the solution
                                     # Observables in ModelingToolkit are stored as Equation objects (lhs ~ rhs)
-                                    # Extract lhs (the variable symbol) from the equation
-                                    obs_var = target_var.lhs
+                                    # BUGFIX: Need to evaluate the RHS expression, not just extract LHS
+                                    # because RHS may contain parameters (e.g., y ~ k*x where k is a parameter)
 
-                                    # Extract using the lhs symbol with sol(t, idxs=var)
-                                    global _probe_values_{system_name} = [_sol_{system_name}(t, idxs=obs_var) for t in _sol_{system_name}.t]
+                                    # Get both lhs and rhs of the equation
+                                    obs_lhs = target_var.lhs
+                                    obs_rhs = target_var.rhs
+
+                                    # Try to substitute values and evaluate the RHS expression
+                                    try
+                                        # Method 1: Manually substitute and evaluate RHS
+                                        # Create a function to evaluate RHS at each time point
+                                        global _probe_values_{system_name} = []
+                                        for i in 1:length(_sol_{system_name}.t)
+                                            # Get current state and parameters
+                                            current_state = _sol_{system_name}.u[i]
+                                            current_t = _sol_{system_name}.t[i]
+
+                                            # Try to evaluate the RHS by substituting current values
+                                            try
+                                                # Use ModelingToolkit's substitute to evaluate RHS
+                                                val = ModelingToolkit.substitute(obs_rhs,
+                                                    ModelingToolkit.build_variable_subst_dict(_sol_{system_name}, i, _sol_{system_name}.prob.p))
+                                                push!(_probe_values_{system_name}, val)
+                                            catch
+                                                # Fallback: just use lhs value
+                                                val = _sol_{system_name}(current_t, idxs=obs_lhs)
+                                                push!(_probe_values_{system_name}, val)
+                                            end
+                                        end
+                                    catch e
+                                        # Fallback: use original method (may be wrong for parametric observables)
+                                        global _probe_values_{system_name} = [_sol_{system_name}(t, idxs=obs_lhs) for t in _sol_{system_name}.t]
+                                    end
                                 else
                                     # For unknowns (differential states), use direct indexing
                                     global _probe_values_{system_name} = [_sol_{system_name}[target_var, i] for i in 1:length(_sol_{system_name}.t)]
@@ -780,6 +833,90 @@ class Simulator:
             result[name] = values[:, i]
 
         return result
+
+    def _get_observed_rhs(self, var_name: str, sys_name: str, system_name: str) -> Optional[str]:
+        """
+        Get the RHS expression of an observed variable.
+
+        Args:
+            var_name: Python variable name (e.g., "plant.y")
+            sys_name: Julia system variable name
+            system_name: System name
+
+        Returns:
+            RHS expression string or None if not an observed variable
+        """
+        try:
+            # Convert to Julia format
+            julia_var_name = var_name.replace(".", "₊")
+
+            # Try to find this variable in observed equations
+            code = f"""
+            let
+                var_sym = Symbol("{julia_var_name}")
+                obs = try
+                    observed({sys_name})
+                catch
+                    []
+                end
+
+                result = ""
+                for eq in obs
+                    # Check if lhs matches
+                    lhs_str = replace(string(eq.lhs), "(t)" => "")
+                    if Symbol(lhs_str) == var_sym
+                        # Found it! Get RHS
+                        rhs_str = string(eq.rhs)
+                        # Convert ₊ back to .
+                        result = replace(rhs_str, "₊" => ".")
+                        # Remove (t) suffix
+                        result = replace(result, "(t)" => "")
+                        break
+                    end
+                end
+                result
+            end
+            """
+
+            result = self._jl.seval(code)
+            if result and len(result) > 0:
+                return result
+            return None
+        except Exception as e:
+            # Not an observed variable or error occurred
+            return None
+
+    def _evaluate_observed_expression(
+        self,
+        expression: str,
+        times: np.ndarray,
+        values: np.ndarray,
+        state_names: List[str],
+        params_dict: Dict[str, float]
+    ) -> np.ndarray:
+        """
+        Evaluate an observed expression using Python.
+
+        Args:
+            expression: RHS expression (e.g., "plant.k*plant.x")
+            times: Time vector
+            values: State values array
+            state_names: List of state names
+            params_dict: Parameter dictionary
+
+        Returns:
+            Evaluated values as numpy array
+        """
+        # Build state_values dictionary
+        state_values = {}
+        for i, name in enumerate(state_names):
+            state_values[name] = values[:, i]
+
+        # Create evaluator
+        evaluator = ObservedExpressionEvaluator(expression, state_names, params_dict)
+
+        # Evaluate
+        return evaluator.evaluate(state_values)
 
     def __repr__(self) -> str:
         return f"Simulator(system='{self.system.name}')"

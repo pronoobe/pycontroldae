@@ -40,7 +40,7 @@ def SecondOrderDAE(name, zeta=0.2, wn=10.0, k=200.0):
     m.add_equation("D(v) ~ -2*zeta*wn*v - wn^2*x + u")
 
     # ===== 代数方程 =====
-    m.add_equation("y ~ k*x")
+    m.add_equation("y ~ k*x ")
 
     return m
 
@@ -51,7 +51,7 @@ step = Step(
     step_time=0.0
 )
 
-# 非常关键（很多库会踩坑）
+
 step.set_output("signal")
 # 创建系统
 system = System("second_order_dae_demo")
@@ -61,7 +61,7 @@ plant = SecondOrderDAE(
     name="plant",
     zeta=0.2,  # 初始阻尼
     wn=10.0,
-    k=200.0
+    k=2
 )
 
 # 添加模块

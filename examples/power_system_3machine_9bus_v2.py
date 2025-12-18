@@ -237,13 +237,13 @@ gen3.build()
 print("[OK] 3台发电机创建完成")
 
 print("\n[1.2] 创建3个AVR...")
-avr1 = AVR(name="avr1", K_a=200.0, T_a=0.05, E_fd_init=2.0)
+avr1 = AVR(name="avr1", K_a=0.001, T_a=0.01, E_fd_init=.01)
 avr1.build()
 
-avr2 = AVR(name="avr2", K_a=200.0, T_a=0.05, E_fd_init=2.0)
+avr2 = AVR(name="avr2", K_a=0.001, T_a=0.01, E_fd_init=.01)
 avr2.build()
 
-avr3 = AVR(name="avr3", K_a=200.0, T_a=0.05, E_fd_init=2.0)
+avr3 = AVR(name="avr3", K_a=0.001, T_a=0.01, E_fd_init=.01)
 avr3.build()
 
 print("[OK] 3个AVR创建完成")
@@ -382,7 +382,7 @@ print("-" * 80)
 
 def fault_occurrence(integrator):
     print(f"    [EVENT @ t={integrator.t:.3f}s] Bus7 半金属性短路！V -> 0.35 p.u.")
-    return {"fault.V_fault_factor": 0.35}
+    return {"fault.V_fault_factor": 0.15}
 
 def fault_clearance(integrator):
     print(f"    [EVENT @ t={integrator.t:.3f}s] 故障切除！V -> 1.0 p.u.")
